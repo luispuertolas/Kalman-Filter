@@ -1,0 +1,166 @@
+using UnityEngine;
+using System.IO.Ports;
+using System;
+using Matrix = MathNet.Numerics.LinearAlgebra.Matrix<double>;
+using OpenCVForUnity;
+using System.Collections;
+
+public class RightForeArmController : MonoBehaviour
+{
+    public KalmanFilter kalman = new KalmanFilter(6, 6, 6, CvType.CV_32FC1);
+    private SerialPort port = new SerialPort("COM3", 9600);
+    private String CurrentReading = "ABCD";
+    private double[] q0 = { 0, 0, 0, 0 };
+    private double[] q1 = { 0, 0, 0, 0 };
+    private double[] q2 = { 0, 0, 0, 0 };
+    private double[] xvalues = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    System.Random rnd = new System.Random();
+    double x, x1, vel, vel1, t1 = 0, t2 = 0, time;
+    float ax, ay, az;
+    private String[] SubStrings;
+    string path = "Assets/test.txt";
+    private Mat x_k = new Mat(9, 1, CvType.CV_32FC1);
+
+    void Start()
+    {
+        
+
+        port.ReadTimeout = 2000;
+        port.Close();
+        if (!port.IsOpen)
+            port.Open();
+    }
+
+    void Update()
+    {
+        Mat transitionMatrix = new Mat(9, 9, CvType.CV_32FC1);
+        transitionMatrix.put(0, 0, 1f);
+        transitionMatrix.put(1, 1, 1f);
+        transitionMatrix.put(2, 2, 1f);
+        transitionMatrix.put(3, 3, 1f);
+        transitionMatrix.put(4, 4, 1f);
+        transitionMatrix.put(5, 5, 1f);
+        transitionMatrix.put(6, 6, 1f);
+        transitionMatrix.put(7, 7, 1f);
+        transitionMatrix.put(8, 8, 1f);
+        transitionMatrix.put(4, 4, Time.deltaTime);
+        transitionMatrix.put(5, 5, Time.deltaTime);
+        transitionMatrix.put(6, 6, Time.deltaTime);
+        transitionMatrix.put(7, 7, Time.deltaTime);
+        transitionMatrix.put(8, 8, Time.deltaTime);
+        transitionMatrix.put(9, 9, Time.deltaTime);
+        transitionMatrix.put(7, 7, 0.5f * Time.deltaTime * Time.deltaTime);
+        transitionMatrix.put(8, 8, 0.5f * Time.deltaTime * Time.deltaTime);
+        transitionMatrix.put(9, 9, 0.5f * Time.deltaTime * Time.deltaTime);
+
+        kalman.set_transitionMatrix(transitionMatrix);
+
+        Mat measurementMatrix = new Mat(9, 9, CvType.CV_32FC1);
+        measurementMatrix.put(0, 0, 1f);
+        measurementMatrix.put(1, 1, 1f);
+        measurementMatrix.put(2, 2, 1f);
+        measurementMatrix.put(3, 3, 1f);
+        measurementMatrix.put(4, 4, 1f);
+        measurementMatrix.put(5, 5, 1f);
+        measurementMatrix.put(6, 6, 1f);
+        measurementMatrix.put(7, 7, 1f);
+        measurementMatrix.put(8, 8, 1f);
+
+
+        kalman.set_measurementMatrix(measurementMatrix);
+
+        Mat processNoiceCovariance = new Mat(9, 9, CvType.CV_32FC1);
+        processNoiceCovariance.put(0, 0, 0.00005f);
+        processNoiceCovariance.put(1, 1, 0.00005f);
+        processNoiceCovariance.put(2, 2, 0.00005f);
+        processNoiceCovariance.put(3, 3, 0.00005f);
+        processNoiceCovariance.put(4, 4, 0.00005f);
+        processNoiceCovariance.put(5, 5, 0.00005f);
+        processNoiceCovariance.put(6, 6, 0.00005f);
+        processNoiceCovariance.put(7, 7, 0.00005f);
+
+        print(processNoiceCovariance.get(1,1));
+
+        kalman.set_processNoiseCov(processNoiceCovariance);
+
+        Mat errorCovariancePost = new Mat(9, 9, CvType.CV_32FC1);
+        errorCovariancePost.put(0, 0, 0.1f);
+        errorCovariancePost.put(1, 1, 0.1f);
+        errorCovariancePost.put(2, 2, 0.1f);
+        errorCovariancePost.put(3, 3, 0.1f);
+        errorCovariancePost.put(4, 4, 0.1f);
+        errorCovariancePost.put(5, 5, 0.1f);
+        errorCovariancePost.put(6, 6, 0.1f);
+        errorCovariancePost.put(7, 7, 0.1f);
+
+        kalman.set_errorCovPost(errorCovariancePost);
+
+        Mat StatePosition = new Mat(9, 1, CvType.CV_32FC1);
+        StatePosition.put(0, 0, 0f);
+        StatePosition.put(1, 1, 0f);
+        StatePosition.put(2, 2, 0f);
+        StatePosition.put(3, 3, 0f);
+        StatePosition.put(4, 4, 0f);
+        StatePosition.put(5, 5, 0f);
+        StatePosition.put(6, 6, 0f);
+        StatePosition.put(7, 7, 0f);
+
+        kalman.set_statePost(StatePosition);
+        Mat MNC = kalman.get_measurementNoiseCov();
+        Mat Wk = new Mat(9, 1, CvType.CV_32FC1);
+        Mat y_k = kalman.predict();
+        Mat z_k = new Mat(1, 1, CvType.CV_32FC1);
+        z_k.put(0, 0, rnd.NextDouble() * (Math.Pow(0.00005f, 0.5)));
+        float[] F = { 1f, 1f, 0f, 1f };
+        
+        CurrentReading = port.ReadLine();
+        SubStrings = CurrentReading.Split(',');
+        q2[0] = Convert.ToSingle(SubStrings[0]);
+        q2[1] = Convert.ToSingle(SubStrings[1]);
+        q2[2] = Convert.ToSingle(SubStrings[2]);
+        q2[3] = Convert.ToSingle(SubStrings[3]);
+        ax = Convert.ToSingle(SubStrings[4]);
+        ay = Convert.ToSingle(SubStrings[5]);
+        az = Convert.ToSingle(SubStrings[6]);
+        time = Convert.ToSingle(SubStrings[7]);
+        if (x >= 0 && x1 >= 0)
+        {
+            vel = x1 - x;
+        }
+        if (x <= 0 && x1 <= 0)
+        {
+            vel = x1 + x;
+        }
+        x_k.put(0, 0, ax);
+        x_k.put(1, 0, (vel) / (time - t2));
+        x_k.put(2, 0, (vel - vel1) / (time - t2));
+        z_k = kalman.get_measurementMatrix() * x_k + z_k;
+        print(z_k.at<float>(0,0));
+        transform.localEulerAngles = new Vector3(az, 0, 0);
+        vel1 = vel;
+        t2 = time;
+        kalman.correct(z_k);
+
+        processNoiceCovariance.put(0, 0, 0.00005f);
+        processNoiceCovariance.put(1, 1, 0.00005f);
+        processNoiceCovariance.put(2, 2, 0.00005f);
+        processNoiceCovariance.put(3, 3, 0.00005f);
+        processNoiceCovariance.put(4, 4, 0.00005f);
+        processNoiceCovariance.put(5, 5, 0.00005f);
+        processNoiceCovariance.put(6, 6, 0.00005f);
+        processNoiceCovariance.put(7, 7, 0.00005f);
+        processNoiceCovariance.put(8, 7, 0.00005f);
+        processNoiceCovariance.put(9, 7, 0.00005f);
+
+        Wk.put(0, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(0, 0)));
+        Wk.put(1, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(1, 0)));
+        Wk.put(2, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(2, 0)));
+        Wk.put(3, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(3, 0)));
+        Wk.put(4, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(4, 0)));
+        Wk.put(5, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(5, 0)));
+        Wk.put(6, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(6, 0)));
+        Wk.put(7, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(7, 0)));
+        Wk.put(8, 0, rnd.NextDouble() * Convert.ToSingle(processNoiceCovariance.get(8, 0)));
+        x_k = kalman.get_transitionMatrix() * x_k;
+    }
+}
