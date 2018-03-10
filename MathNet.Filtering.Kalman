@@ -1,0 +1,137 @@
+using System;
+using System.IO.Ports;
+using MathNet.Filtering.Kalman;
+using Matrix = MathNet.Numerics.LinearAlgebra.Matrix<double>;
+
+namespace Kalman_Filter_Nuget
+{
+    class Program
+    {
+        static void Main(string[] args) 
+        {
+
+            
+            SerialPort port = new SerialPort("COM3", 19200);
+            String CurrentReading = "ABCD";
+            Matrix initial = Matrix.Build.DenseOfArray(new double[,] {
+                         {0},
+                         {0},
+                         {0},
+                         {0},
+                         {0},
+                         {0},
+                         {0},
+                         {0},
+                         {0} });
+            Matrix covariance = Matrix.Build.DenseOfArray(new double[,] {
+                         {0.1,0,0,0,0,0,0,0,0},
+                         {0,0.1,0,0,0,0,0,0,0},
+                         {0,0,0.1,0,0,0,0,0,0},
+                         {0,0,0,0.1,0,0,0,0,0},
+                         {0,0,0,0,0.1,0,0,0,0},
+                         {0,0,0,0,0,0.1,0,0,0},
+                         {0,0,0,0,0,0,0.1,0,0},
+                         {0,0,0,0,0,0,0,0.1,0},
+                         {0,0,0,0,0,0,0,0,0.1 } });
+            DiscreteKalmanFilter kalman = new DiscreteKalmanFilter(initial, covariance);
+            double[] IndividualValues = { 0, 0, 0, 0, 0, 0 };
+            String[] SubStrings;
+            double x = 0, y = 0, z = 0, vx = 0, t2 = 0, x1, y1, z1, time, velx, vely, velz, accx, accy, accz;
+            bool correctRead;
+            int comaCount = 0;
+            char[] test;
+            port.ReadTimeout = 2000;
+            port.Close();
+            if (!port.IsOpen)
+                port.Open();
+
+            while (t2 <= 20000000000)
+            {
+                CurrentReading = port.ReadLine();
+                test = CurrentReading.ToCharArray();
+                correctRead = true;
+                comaCount = 0;
+                for (int i = test.Length - 1; i >= 0; i--)
+                {
+                    if (Char.IsNumber(test[i]) == false & test[i] != ',' & test[i] != '.' & Char.IsWhiteSpace(test[i]) == false & test[i] != '-')
+                    {
+                        correctRead = false;
+                    }
+                    if (test[i] == ',')
+                    {
+                        comaCount = comaCount + 1;
+                    }
+                }
+                if (correctRead == true & comaCount == 4)
+                {
+                    SubStrings = CurrentReading.Split(',');
+                    x1 = Convert.ToSingle(SubStrings[0]);
+                    y1 = Convert.ToSingle(SubStrings[1]);
+                    z1 = Convert.ToSingle(SubStrings[2]);
+                    time = Convert.ToSingle(SubStrings[3]);
+                    velx = (x1 - x) / (time - t2);
+                    vely = (y1 - y) / (time - t2);
+                    velz = (z1 - z) / (time - t2);
+                    accx = velx / (time - t2);
+                    accy = vely / (time - t2);
+                    accz = velz / (time - t2);
+                    //Dummy Data : Generate a very noisy position estimate
+                    Matrix res = Matrix.Build.DenseOfArray(new double[,] {
+                         {x1,0,0,0,0,0,0,0,0},
+                         {0,y1,0,0,0,0,0,0,0},
+                         {0,0,z1,0,0,0,0,0,0},
+                         {0,0,0,velx,0,0,0,0,0},
+                         {0,0,0,0,vely,0,0,0,0},
+                         {0,0,0,0,0,velz,0,0,0},
+                         {0,0,0,0,0,0,accx,0,0},
+                         {0,0,0,0,0,0,0,accy,0},
+                         {0,0,0,0,0,0,0,0,accz } });
+                    Matrix Meassurement = Matrix.Build.DenseOfArray(new double[,] {
+                         {0.1},
+                         {0.1},
+                         {0.1},
+                         {0.1},
+                         {0.1},
+                         {0.1},
+                         {0.1},
+                         {0.1},
+                         {0.1} });
+                    Matrix Noise = Matrix.Build.DenseOfArray(new double[,] {
+                         {0.2321119684f,0,0,0,0,0,0,0,0},
+                         {0,0.00086436f,0,0,0,0,0,0,0},
+                         {0,0,0.22648081f,0,0,0,0,0,0},
+                         {0,0,0,0.00002701125f,0,0,0,0,0},
+                         {0,0,0,0,0.000000059536f,0,0,0,0},
+                         {0,0,0,0,0,0.000001946025f,0,0,0},
+                         {0,0,0,0,0,0,0.0000008441015625f,0,0},
+                         {0,0,0,0,0,0,0,0.0000000018605f,0},
+                         {0,0,0,0,0,0,0,0,0.00000006081328125f } });
+                    //veryfied
+                    Matrix startetrans = Matrix.Build.DenseOfArray(new double[,] {
+                         {1,0,0,0,0,0,0,0,0},
+                         {0,1,0,0,0,0,0,0,0},
+                         {0,0,1,0,0,0,0,0,0},
+                         {0,0,0,1,0,0,0,0,0},
+                         {0,0,0,0,1,0,0,0,0},
+                         {0,0,0,0,0,1,0,0,0},
+                         {0,0,0,0,0,0,1,0,0},
+                         {0,0,0,0,0,0,0,1,0},
+                         {0,0,0,0,0,0,0,0,1 } });
+
+                    kalman.Predict(startetrans, kalman.Cov);
+                    kalman.Update(Meassurement, Noise, covariance);
+
+                    x1 += kalman.State.At(0, 0);
+                    y1 += kalman.State.At(1, 0);
+                    z1 += kalman.State.At(2, 0);
+                    Console.WriteLine(x1 +","+ y1 +"," +z1);
+                    t2 = time;
+                    x = x1;
+                    y = y1;
+                    z = z1;
+                }
+            }
+
+        }
+    }
+}
