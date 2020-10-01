@@ -1,4 +1,4 @@
-//Copyright Luis Andrés Puértolas Bálint
+//Luis Andrés Puértolas Bálint
 //Queen Mary University of London
 //Advanced Robotics Lab
 //l.a.puertolasbalint@qmul.ac.uk
