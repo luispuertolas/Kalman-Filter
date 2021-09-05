@@ -1,4 +1,6 @@
 #kalman filter
+#Coded by Luis Andrés Puértolas Bálint
+
 
 Interfacing the ADXL345 accelerometer and the IMU_ITG3200 gyroscope on an Arduino board.
 
