@@ -3,6 +3,14 @@
 //Advanced Robotics Lab
 //l.a.puertolasbalint@qmul.ac.uk
 //Do not use without authorization
+//
+//////////////////////////////////
+//          Important:          //
+//   This code needs to filter  //
+//    the temperature as well.  //
+//  This part is missing from   //
+//        this version.         //
+//////////////////////////////////
 
 using System;
 using System.IO.Ports;
